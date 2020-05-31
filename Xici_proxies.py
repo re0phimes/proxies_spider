@@ -33,7 +33,7 @@ class Find_Proxies:
         #         proxies = self.get_proxies() #从数据库中获取一个代理
         try:
             r = requests.get(url, headers=headers ,timeout=10)
-            print(r.status_code)
+            # print(r.status_code)
             if r.status_code == 200:
                 doc = pq(r.text)
                 ips = doc('tr')
@@ -60,6 +60,7 @@ class Find_Proxies:
                 print(next_url)
                 time.sleep(10)  # 等待10秒，以免被禁
                 self.get_onepg(next_url)
+                print('%s page has been downloaded' %(str(i)))
             return self.iplist # 注意这里
         except Exception as e:
             logger.warning(e)
@@ -83,7 +84,13 @@ class Find_Proxies:
                 if ip[0] in curr_proxies:
                     self.iplist.remove(ip)
                     self.verify_ip(ip, 'https://www.zhihu.com/')
-            return self.iplist
+            # 插入
+            insert_sql = 'INSERT INTO xici(ip,type) VALUES(%s,%s)'
+            tuple_data = tuple(self.iplist)
+            cursor.executemany(insert_sql, tuple_data)
+            mysqldb.commit()
+            print('inserted %d documents of valid ip' %(len(self.iplist)))
+            mysqldb.close()
         except Exception as e:
             logger.warning(e)
             logger.warning('check ip exits error')
@@ -108,6 +115,7 @@ class Find_Proxies:
                 if r.status_code != 200:
                     iplist.remove(ip)
 
+
     def main_func(self, start, end):
         self.mul_pgs(start, end)
         currIplist = self.if_exits()
@@ -117,7 +125,7 @@ class Find_Proxies:
         tuple_data = tuple(currIplist)
         cursor.executemany(insert_sql, tuple_data)
         mysqldb.commit()
-        print('inserted %d documents of valid ip' % (len(currIplist)))
+        print('inserted %d documents of valid ip' %(len(currIplist)))
         mysqldb.close()
 
     def get_proxies(self):
@@ -145,8 +153,8 @@ class Find_Proxies:
 
 if __name__ == '__main__':
     Proxy_Spider = Find_Proxies()
-    tempIp = Proxy_Spider.get_proxies()
-    print(tempIp, Proxy_Spider.iplist)
-    Proxy_Spider.mul_pgs(3,5)
+    # tempIp = Proxy_Spider.get_proxies()
+    # print(tempIp, Proxy_Spider.iplist)
+    Proxy_Spider.mul_pgs(11,15)
     Proxy_Spider.if_exits()
     print(Proxy_Spider.iplist)
