@@ -3,14 +3,24 @@ from fake_useragent import UserAgent
 from pyquery import PyQuery as pq
 
 
-ua = UserAgent()
-headers = {'User-Agent' : ua.random}
+# setting logger module
+basic_format = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
+logging.basicConfig(level= logging.INFO, format=basic_format)
 logger = logging.getLogger(__name__)
 
+
+
+ua = UserAgent()
+headers = {'User-Agent' : ua.random}
+
+
 # set up database
-mysqldb = pymysql.connect('180.76.153.244','root','123456','mysql_proxies')
-cursor = mysqldb.cursor()
-cursor.execute('select VERSION()')
+try:
+    mysqldb = pymysql.connect('180.76.153.244','root','123456','mysql_proxies')
+    cursor = mysqldb.cursor()
+    cursor.execute('select VERSION()')
+except Exception as e:
+    logger.debug('failed to connect mysql db, the error is %s' %(e))
 
 # set up global variables
 url = "https://www.xicidaili.com/nn/"
@@ -42,11 +52,16 @@ class Find_Proxies:
                     temp_ip_tuple = (onedatalist[1 ] +': ' +onedatalist[2] ,onedatalist[5])
                     #                     temp_ip_dict = {'ip':onedatalist[1]+':'+onedatalist[2],'type':onedatalist[5]} #用于mongodb存的字典格式
                     self.iplist.append(temp_ip_tuple)
+                logger.info(url + " has downloaded")
             else:
-                print('failed to get the page, the status code is %s' %str(r.status_code))
+                logger.info('failed to get the page, the status code is %s' %str(r.status_code))
         except Exception as e:
             logger.warning(e)
-            logger.warning('failed to get the page, the status code is %s' % str(r.status_code))
+            logger.info('failed to get the page, the status code is %s' % str(r.status_code))
+        # finally:
+            # 添加代理反爬虫
+            # if r.status_code == 503:
+
 
     def mul_pgs(self, start, end):
         """
@@ -57,18 +72,17 @@ class Find_Proxies:
         try:
             for i in range(start, end):
                 next_url = url + str(i)
-                print(next_url)
                 time.sleep(10)  # 等待10秒，以免被禁
+                logger.info('waiting for 10s to get next page.......')
                 self.get_onepg(next_url)
-                print('%s page has been downloaded' %(str(i)))
+                logger.info('%s page has been downloaded' %(str(i)))
             return self.iplist # 注意这里
         except Exception as e:
             logger.warning(e)
-            logger.warning('mul_pgs failed')
 
     def if_exits(self):
         """
-        判断ip是否已存在list中
+        判断ip是否已存在list中，并写入
         :param iplist:本次爬取得代理iplist
         """
         # 连接数据库
@@ -77,60 +91,74 @@ class Find_Proxies:
             sql = 'select ip from xici'
             if cursor.execute(sql):
                 fetch_res = cursor.fetchall()
+                logger.debug(type(fetch_res))
                 curr_proxies = [data[0] for data in fetch_res]
+                logger.debug(curr_proxies[0])
+                for ip in self.iplist:
+                    if ip[0] in curr_proxies:
+                        logger.debug(type(ip))
+                        self.iplist.remove(ip)
+                        logger.info(str(ip) + 'has removed from iplist due to it is already stored in database')
+                        self.verify_ip(ip, 'https://www.zhihu.com/')
             else:
-                print("failed to get data")
-            for ip in self.iplist:
-                if ip[0] in curr_proxies:
-                    self.iplist.remove(ip)
-                    self.verify_ip(ip, 'https://www.zhihu.com/')
+                logger.info("failed to get data")
             # 插入
             insert_sql = 'INSERT INTO xici(ip,type) VALUES(%s,%s)'
             tuple_data = tuple(self.iplist)
             cursor.executemany(insert_sql, tuple_data)
             mysqldb.commit()
-            print('inserted %d documents of valid ip' %(len(self.iplist)))
+            logger.info('inserted %d columns of valid ip' %(len(self.iplist)))
             mysqldb.close()
         except Exception as e:
             logger.warning(e)
-            logger.warning('check ip exits error')
 
     def verify_ip(self, ip, testurl):
         """
         :param ip:单个获取到得ip tuple
         :param testurl: 用于测试得IP地址
         """
-        if ip['type'] == 'http':
+        if ip[1] == 'http':
             try:
-                r = requests.get(testurl, proxies={'http': ip['ip']}, timeout=5)
-            except:
+                r = requests.get(testurl, proxies={'http': ip[0]}, timeout=5)
+            except Exception as e:
+                logger.info('current ip %s is not useful, drop it!' %str(ip[0]))
                 time.sleep(5)
                 if r.status_code != 200:
                     iplist.remove(ip)
-        else:
-            try:
-                r = requests.get(testurl, proxies={'https': ip['ip']}, timeout=5)
-            except:
-                time.sleep(5)
-                if r.status_code != 200:
-                    iplist.remove(ip)
+        # else:
+        #     try:
+        #         r2 = requests.get(testurl, proxies={'https': ip[0]}, timeout=5)
+        #     except:
+        #         logger.info(r2.status_code)
+        #         time.sleep(5)
+        #         if r2.status_code != 200:
+        #             iplist.remove(ip)
 
 
-    def main_func(self, start, end):
-        self.mul_pgs(start, end)
-        currIplist = self.if_exits()
-        # 写入
-        #             client = pymongo.MongoClient("mongodb://phi:Project0925@localhost:27017")
-        insert_sql = 'INSERT INTO xici(ip,type) VALUES(%s,%s)'
-        tuple_data = tuple(currIplist)
-        cursor.executemany(insert_sql, tuple_data)
-        mysqldb.commit()
-        print('inserted %d documents of valid ip' %(len(currIplist)))
-        mysqldb.close()
+    def fetch_ip(self, start = 1, end = 31):
+        '''
+        fetch ip from xici proxies, get first 30 pages by default
+        :param start: start page
+        :param end: end page
+        '''
+        try:
+            self.mul_pgs(start, end)
+            self.if_exits()
+            # mongodb setting client = pymongo.MongoClient("mongodb://phi:Project0925@localhost:27017")
+            # insert into mysql db
+            insert_sql = 'INSERT INTO xici(ip,type) VALUES(%s,%s)'
+            tuple_data = tuple(self.iplist)
+            cursor.executemany(insert_sql, tuple_data)
+            mysqldb.commit()
+            logger.info('inserted %d documents of valid ip' %(len(self.iplist)))
+            mysqldb.close()
+        except Exception as e:
+            logger.warning(e)
 
     def get_proxies(self):
         '''
         从服务器的数据库获取一个代理IP
+        :return: ip
         '''
         #         client = pymongo.MongoClient("mongodb://testuser:123456@localhost:27017")
         sql = 'select ip from xici'
@@ -155,6 +183,5 @@ if __name__ == '__main__':
     Proxy_Spider = Find_Proxies()
     # tempIp = Proxy_Spider.get_proxies()
     # print(tempIp, Proxy_Spider.iplist)
-    Proxy_Spider.mul_pgs(11,15)
-    Proxy_Spider.if_exits()
+    Proxy_Spider.fetch_ip(3,4)
     print(Proxy_Spider.iplist)
