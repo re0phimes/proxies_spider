@@ -19,6 +19,7 @@ try:
     mysqldb = pymysql.connect('180.76.153.244','root','123456','mysql_proxies')
     cursor = mysqldb.cursor()
     cursor.execute('select VERSION()')
+    logger.info(str(cursor) + 'conenected')
 except Exception as e:
     logger.debug('failed to connect mysql db, the error is %s' %(e))
 
@@ -94,12 +95,14 @@ class Find_Proxies:
                 logger.debug(type(fetch_res))
                 curr_proxies = [data[0] for data in fetch_res]
                 logger.debug(curr_proxies[0])
-                for ip in self.iplist:
-                    if ip[0] in curr_proxies:
-                        logger.debug(type(ip))
-                        self.iplist.remove(ip)
-                        logger.info(str(ip) + 'has removed from iplist due to it is already stored in database')
-                        self.verify_ip(ip, 'https://www.zhihu.com/')
+                #对比爬取的数据库里的ip是否重叠
+                for ip_tuple in self.iplist:
+                    if ip_tuple[0] in curr_proxies:
+                        logger.debug(type(ip_tuple))
+                        self.iplist.remove(ip_tuple)
+                        logger.info(str(ip_tuple) + 'has removed from iplist due to it is already stored in database')
+                    #验证是否可用
+                    self.verify_ip(ip_tuple, 'https://www.zhihu.com/')
             else:
                 logger.info("failed to get data")
             # 插入
@@ -112,19 +115,21 @@ class Find_Proxies:
         except Exception as e:
             logger.warning(e)
 
-    def verify_ip(self, ip, testurl):
+    def verify_ip(self, ip_tuple, testurl):
         """
         :param ip:单个获取到得ip tuple
         :param testurl: 用于测试得IP地址
         """
-        if ip[1] == 'http':
-            try:
-                r = requests.get(testurl, proxies={'http': ip[0]}, timeout=5)
-            except Exception as e:
-                logger.info('current ip %s is not useful, drop it!' %str(ip[0]))
-                time.sleep(5)
-                if r.status_code != 200:
-                    iplist.remove(ip)
+        proxies = {
+            str(ip_tuple[1]):str(ip_tuple[0])
+        }
+        try:
+            r = requests.get(testurl, proxies=proxies, timeout=5)
+            if r.status_code != 200:
+                self.iplist.remove(ip_tuple)
+        except Exception as e:
+            # logger.info('current ip %s is not useful, drop it!' %str(ip_tuple[0]))
+            logger.warning(e)
         # else:
         #     try:
         #         r2 = requests.get(testurl, proxies={'https': ip[0]}, timeout=5)
@@ -146,6 +151,7 @@ class Find_Proxies:
             self.if_exits()
             # mongodb setting client = pymongo.MongoClient("mongodb://phi:Project0925@localhost:27017")
             # insert into mysql db
+            logger.info('writing valid ips into database')
             insert_sql = 'INSERT INTO xici(ip,type) VALUES(%s,%s)'
             tuple_data = tuple(self.iplist)
             cursor.executemany(insert_sql, tuple_data)
@@ -183,5 +189,5 @@ if __name__ == '__main__':
     Proxy_Spider = Find_Proxies()
     # tempIp = Proxy_Spider.get_proxies()
     # print(tempIp, Proxy_Spider.iplist)
-    Proxy_Spider.fetch_ip(3,4)
-    print(Proxy_Spider.iplist)
+    Proxy_Spider.fetch_ip(7,8)
+    # print(Proxy_Spider.iplist)
