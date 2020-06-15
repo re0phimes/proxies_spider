@@ -1,10 +1,10 @@
-import requests, random, pymongo,logging, pymysql, time
+import requests, random, pymongo,logging, time
 from fake_useragent import UserAgent
 from pyquery import PyQuery as pq
 
 
 # setting logger module
-basic_format = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(message)s'
+basic_format = '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s - %(lineno)d - %(message)s'
 logging.basicConfig(level= logging.INFO, format=basic_format)
 logger = logging.getLogger(__name__)
 
@@ -16,28 +16,21 @@ headers = {'User-Agent' : ua.random}
 
 # set up database
 try:
-    # mysqldb = pymysql.connect('180.76.153.244','root','123456','mysql_proxies')
-    # cursor = mysqldb.cursor()
-    # cursor.execute('select VERSION()')
-    # logger.info(str(cursor) + 'conenected')
-    client = pymongo.MongoClient("mongodb://phimes:phimes123456@localhost:27017")
+    client = pymongo.MongoClient("mongodb://phimes:phimes123456@180.76.153.244:27017")
     mydb = client['proxiesdb']
     mycol = mydb['proxies_table']
+    client.server_info()
 except Exception as e:
     logger.debug('failed to connect mysql db, the error is %s' %(e))
 
 # set up global variables
 url = "https://www.xicidaili.com/nn/"
-# iplist = []
 
 # xici proxies
 class Find_Proxies:
 
     def __init__(self):
         self.iplist = []
-    #     self.proxies = {}
-
-
 
     def get_onepg(self ,url):
         """
@@ -90,20 +83,22 @@ class Find_Proxies:
         :param iplist:本次爬取得代理iplist
         """
         # 连接数据库
+        fetch_res = mycol.find()
+        logger.debug(type(fetch_res))
+        curr_proxies = [data['ip'] for data in fetch_res]
+        logger.debug(curr_proxies[0])
+        #对比爬取的数据库里的ip是否重叠
         try:
-            cursor.execute(sql):
-            fetch_res = mycol.find()
-            logger.debug(type(fetch_res))
-            curr_proxies = [data['ip'] for data in fetch_res]
-            logger.debug(curr_proxies[0])
-            #对比爬取的数据库里的ip是否重叠
-            for ip_dict['ip'] in self.iplist:
+            duplicate_count = 0
+            for ip_dict in self.iplist:
                 if ip_dict['ip'] in curr_proxies:
                     logger.debug(type(ip_dict))
                     self.iplist.remove(ip_dict)
+                    duplicate_count = duplicate_count + 1
                     logger.info(str(ip_dict) + 'has removed from iplist due to it is already stored in database')
                 #验证是否可用
-                self.verify_ip(ip_dict, 'https://www.zhihu.com/')
+            logger.info('%s in total has been removed from iplist' %s(str(duplicate_count)))
+                # self.verify_ip(ip_dict, 'https://www.zhihu.com/')
         except Exception as e:
             logger.warning(e)
 
@@ -141,11 +136,8 @@ class Find_Proxies:
         try:
             self.mul_pgs(start, end)
             self.if_exits()
-            # mongodb setting client = pymongo.MongoClient("mongodb://phi:Project0925@localhost:27017")
-            # insert into mysql db
-            mycol.insertmany(self.iplist)
-            logger.info('writing valid ips into database')
-
+            mycol.insert_many(self.iplist)
+            logger.info('writing valid ips %s into database' %s(len(self.iplist)))
         except Exception as e:
             logger.warning(e)
 
@@ -175,7 +167,4 @@ class Find_Proxies:
 
 if __name__ == '__main__':
     Proxy_Spider = Find_Proxies()
-    # tempIp = Proxy_Spider.get_proxies()
-    # print(tempIp, Proxy_Spider.iplist)
-    Proxy_Spider.fetch_ip(7,8)
-    # print(Proxy_Spider.iplist)
+    Proxy_Spider.fetch_ip(1,32)
