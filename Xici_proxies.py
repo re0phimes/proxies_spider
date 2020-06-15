@@ -16,10 +16,13 @@ headers = {'User-Agent' : ua.random}
 
 # set up database
 try:
-    mysqldb = pymysql.connect('180.76.153.244','root','123456','mysql_proxies')
-    cursor = mysqldb.cursor()
-    cursor.execute('select VERSION()')
-    logger.info(str(cursor) + 'conenected')
+    # mysqldb = pymysql.connect('180.76.153.244','root','123456','mysql_proxies')
+    # cursor = mysqldb.cursor()
+    # cursor.execute('select VERSION()')
+    # logger.info(str(cursor) + 'conenected')
+    client = pymongo.MongoClient("mongodb://phimes:phimes123456@localhost:27017")
+    mydb = client['proxiesdb']
+    mycol = mydb['proxies_table']
 except Exception as e:
     logger.debug('failed to connect mysql db, the error is %s' %(e))
 
@@ -50,9 +53,9 @@ class Find_Proxies:
                 ips = doc('tr')
                 for one_set_data in list(ips.items())[1:]:
                     onedatalist = one_set_data('td').text().split(' ')
-                    temp_ip_tuple = (onedatalist[1 ] +': ' +onedatalist[2] ,onedatalist[5])
-                    #                     temp_ip_dict = {'ip':onedatalist[1]+':'+onedatalist[2],'type':onedatalist[5]} #用于mongodb存的字典格式
-                    self.iplist.append(temp_ip_tuple)
+                    # temp_ip_tuple = (onedatalist[1] +': ' +onedatalist[2] ,onedatalist[5])
+                    one_ip_dict = {'ip':onedatalist[1]+':'+onedatalist[2],'type':onedatalist[5]} #用于mongodb存的字典格式
+                    self.iplist.append(one_ip_dict)
                 logger.info(url + " has downloaded")
             else:
                 logger.info('failed to get the page, the status code is %s' %str(r.status_code))
@@ -88,30 +91,19 @@ class Find_Proxies:
         """
         # 连接数据库
         try:
-            #             curr_proxies = list(db.find({},{'_id':0,'ip':1}))
-            sql = 'select ip from xici'
-            if cursor.execute(sql):
-                fetch_res = cursor.fetchall()
-                logger.debug(type(fetch_res))
-                curr_proxies = [data[0] for data in fetch_res]
-                logger.debug(curr_proxies[0])
-                #对比爬取的数据库里的ip是否重叠
-                for ip_tuple in self.iplist:
-                    if ip_tuple[0] in curr_proxies:
-                        logger.debug(type(ip_tuple))
-                        self.iplist.remove(ip_tuple)
-                        logger.info(str(ip_tuple) + 'has removed from iplist due to it is already stored in database')
-                    #验证是否可用
-                    self.verify_ip(ip_tuple, 'https://www.zhihu.com/')
-            else:
-                logger.info("failed to get data")
-            # 插入
-            insert_sql = 'INSERT INTO xici(ip,type) VALUES(%s,%s)'
-            tuple_data = tuple(self.iplist)
-            cursor.executemany(insert_sql, tuple_data)
-            mysqldb.commit()
-            logger.info('inserted %d columns of valid ip' %(len(self.iplist)))
-            mysqldb.close()
+            cursor.execute(sql):
+            fetch_res = mycol.find()
+            logger.debug(type(fetch_res))
+            curr_proxies = [data['ip'] for data in fetch_res]
+            logger.debug(curr_proxies[0])
+            #对比爬取的数据库里的ip是否重叠
+            for ip_dict['ip'] in self.iplist:
+                if ip_dict['ip'] in curr_proxies:
+                    logger.debug(type(ip_dict))
+                    self.iplist.remove(ip_dict)
+                    logger.info(str(ip_dict) + 'has removed from iplist due to it is already stored in database')
+                #验证是否可用
+                self.verify_ip(ip_dict, 'https://www.zhihu.com/')
         except Exception as e:
             logger.warning(e)
 
@@ -151,13 +143,9 @@ class Find_Proxies:
             self.if_exits()
             # mongodb setting client = pymongo.MongoClient("mongodb://phi:Project0925@localhost:27017")
             # insert into mysql db
+            mycol.insertmany(self.iplist)
             logger.info('writing valid ips into database')
-            insert_sql = 'INSERT INTO xici(ip,type) VALUES(%s,%s)'
-            tuple_data = tuple(self.iplist)
-            cursor.executemany(insert_sql, tuple_data)
-            mysqldb.commit()
-            logger.info('inserted %d documents of valid ip' %(len(self.iplist)))
-            mysqldb.close()
+
         except Exception as e:
             logger.warning(e)
 
