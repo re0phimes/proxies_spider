@@ -27,7 +27,7 @@ except Exception as e:
 url = "https://www.xicidaili.com/nn/"
 
 # xici proxies
-class Find_Proxies:
+class Proxy_Spider:
 
     def __init__(self):
         self.iplist = []
@@ -94,7 +94,7 @@ class Find_Proxies:
                 if ip_dict['ip'] in curr_proxies:
                     logger.debug(type(ip_dict))
                     self.iplist.remove(ip_dict)
-                    duplicate_count = duplicate_count + 1
+                    duplicate_count += 1
                     logger.info(str(ip_dict) + 'has removed from iplist due to it is already stored in database')
                 #验证是否可用
             logger.info('%s in total has been removed from iplist' %s(str(duplicate_count)))
@@ -102,18 +102,19 @@ class Find_Proxies:
         except Exception as e:
             logger.warning(e)
 
-    def verify_ip(self, ip_tuple, testurl):
+    def verify_ip(self, ip_dict):
         """
         :param ip:单个获取到得ip tuple
         :param testurl: 用于测试得IP地址
         """
         proxies = {
-            str(ip_tuple[1]):str(ip_tuple[0])
+            ip_dict['type']: "http:\\" + ip_dict['ip'],
         }
+        testurl = "https:\\www.baidu.com"
         try:
             r = requests.get(testurl, proxies=proxies, timeout=5)
             if r.status_code != 200:
-                self.iplist.remove(ip_tuple)
+                self.iplist.remove(ip_dict)
         except Exception as e:
             # logger.info('current ip %s is not useful, drop it!' %str(ip_tuple[0]))
             logger.warning(e)
@@ -141,30 +142,14 @@ class Find_Proxies:
         except Exception as e:
             logger.warning(e)
 
+
+class DBData:
     def get_proxies(self):
-        '''
-        从服务器的数据库获取一个代理IP
-        :return: ip
-        '''
-        #         client = pymongo.MongoClient("mongodb://testuser:123456@localhost:27017")
-        sql = 'select ip from xici'
-        if cursor.execute(sql):
-            fetch_res = cursor.fetchall()
-            curr_proxies = [data[0] for data in fetch_res]  # 合并提取出来的ip到iplist中
-            self.iplist = list(set(self.iplist + curr_proxies))
-        ip = random.choice(self.iplist)
-        return ip
 
-        # 检测代理池中IP数量，少于X就要重新获取。
-
-    def count_valid_proxies(self):
-        #         client = pymongo.MongoClient("mongodb://testuser:123456@localhost:27017")
-        iplist = db.find({}, {'_id': 0, 'ip': 1})
-        if len(iplist) < 100:
-            self.main_func()
+    def remove_one_proxy(self):
 
 
 
 if __name__ == '__main__':
-    Proxy_Spider = Find_Proxies()
-    Proxy_Spider.fetch_ip(1,32)
+    proxySpdier = Proxy_Spider()
+    proxySpider.fetch_ip(1,32)
