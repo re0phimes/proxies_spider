@@ -118,14 +118,7 @@ class Proxy_Spider:
         except Exception as e:
             # logger.info('current ip %s is not useful, drop it!' %str(ip_tuple[0]))
             logger.warning(e)
-        # else:
-        #     try:
-        #         r2 = requests.get(testurl, proxies={'https': ip[0]}, timeout=5)
-        #     except:
-        #         logger.info(r2.status_code)
-        #         time.sleep(5)
-        #         if r2.status_code != 200:
-        #             iplist.remove(ip)
+
 
 
     def fetch_ip(self, start = 1, end = 31):
@@ -143,12 +136,14 @@ class Proxy_Spider:
             logger.warning(e)
 
 
-class DBData:
-    def get_proxies(self):
+    def get_new_proxy(self ):
+        fetch = mycol.find()
+        fetch_ip = [x['ip'] for x in fetch]
+        random.choice(fetch_ip)
 
-    def remove_one_proxy(self):
-
-
+    def delete_proxy(self, ip):
+        ip_dict = {'ip':ip}
+        mycol.delete_one(ip_dict)
 
 if __name__ == '__main__':
     proxySpdier = Proxy_Spider()
